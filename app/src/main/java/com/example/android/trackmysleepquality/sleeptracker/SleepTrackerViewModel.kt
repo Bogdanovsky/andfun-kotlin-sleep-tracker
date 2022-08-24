@@ -33,13 +33,13 @@ class SleepTrackerViewModel(
         val database: SleepDatabaseDao,
         application: Application) : AndroidViewModel(application) {
 
-                private val viewModelJob = Job()
+        private var viewModelJob = Job()
 
         override fun onCleared() {
                 super.onCleared()
                 viewModelJob.cancel()
         }
-        private val uiScope = CoroutineScope(Dispatchers.IO + viewModelJob)
+        private val uiScope = CoroutineScope(Dispatchers.Main +  viewModelJob)
         private var tonight = MutableLiveData<SleepNight?>()
         private val nights = database.getAllNights()
         val nightsString = Transformations.map(nights) {nights ->
