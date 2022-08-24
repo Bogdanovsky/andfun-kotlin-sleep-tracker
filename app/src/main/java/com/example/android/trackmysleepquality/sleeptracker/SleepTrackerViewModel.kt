@@ -19,7 +19,12 @@ package com.example.android.trackmysleepquality.sleeptracker
 import android.app.Application
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.Transformations
 import com.example.android.trackmysleepquality.database.SleepDatabaseDao
+import com.example.android.trackmysleepquality.database.SleepNight
+import com.example.android.trackmysleepquality.formatNights
+import kotlinx.coroutines.*
 
 /**
  * ViewModel for SleepTrackerFragment.
@@ -28,28 +33,80 @@ class SleepTrackerViewModel(
         val database: SleepDatabaseDao,
         application: Application) : AndroidViewModel(application) {
 
-    //TODO (01) Declare Job() and cancel jobs in onCleared().
+                private val viewModelJob = Job()
 
-    //TODO (02) Define uiScope for coroutines.
+        override fun onCleared() {
+                super.onCleared()
+                viewModelJob.cancel()
+        }
+        private val uiScope = CoroutineScope(Dispatchers.IO + viewModelJob)
+        private var tonight = MutableLiveData<SleepNight?>()
+        private val nights = database.getAllNights()
+        val nightsString = Transformations.map(nights) {nights ->
+            formatNights(nights, application.resources)
+        }
 
-    //TODO (03) Create a MutableLiveData variable tonight for one SleepNight.
+        init {
+            initializeTonight()
+        }
 
-    //TODO (04) Define a variable, nights. Then getAllNights() from the database
-    //and assign to the nights variable.
+        private fun initializeTonight() {
+                uiScope.launch { 
+                        tonight.value = getTonightFromDatabase()
+                }
+        }
 
-    //TODO (05) In an init block, initializeTonight(), and implement it to launch a coroutine
-    //to getTonightFromDatabase().
+        private suspend fun getTonightFromDatabase(): SleepNight? {
+                return withContext(Dispatchers.IO) {
+                        var night = database.getTonight()
+                        if (night?.startTimeMilli != night?.endTimeMilli) {
+                                night = null
+                        }
+                        night
+                }
 
-    //TODO (06) Implement getTonightFromDatabase()as a suspend function.
+        }
 
-    //TODO (07) Implement the click handler for the Start button, onStartTracking(), using
-    //coroutines. Define the suspend function insert(), to insert a new night into the database.
+        fun onStartTracking() {
+                uiScope.launch {
+                        val newNight = SleepNight()
+                        insert(newNight)
+                        tonight.value = getTonightFromDatabase()
+                }
+        }
 
-    //TODO (08) Create onStopTracking() for the Stop button with an update() suspend function.
+        private suspend fun insert(night: SleepNight) {
+                withContext(Dispatchers.IO) {
+                        database.insert(night)
+                }
+        }
 
-    //TODO (09) For the Clear button, created onClear() with a clear() suspend function.
+        fun onStopTracking() {
+                uiScope.launch {
+                        val oldNight = tonight.value ?: return@launch
+                        oldNight.endTimeMilli = System.currentTimeMillis()
+                        update(oldNight)
+                }
+        }
 
-    //TODO (12) Transform nights into a nightsString using formatNights().
+        private suspend fun update(night: SleepNight) {
+                withContext(Dispatchers.IO) {
+                        database.update(night)
+                }
+        }
+
+        fun onClear() {
+                uiScope.launch {
+                        clear()
+                        tonight.value = null
+                }
+        }
+
+        suspend fun clear() {
+                withContext(Dispatchers.IO) {
+                        database.clear()
+                }
+        }
 
 }
 
